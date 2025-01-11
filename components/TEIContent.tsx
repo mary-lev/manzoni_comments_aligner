@@ -1,10 +1,13 @@
 import React from 'react';
+import { Button } from "./ui/Button";
 
 interface TEIContentProps {
   renderedTEI: string | null;
   highlightedText: { start: number; end: number } | null;
   selectedTextRange: { start: number; end: number } | null;
   isManualAlignmentMode: boolean;
+  isTextSelected: boolean;
+  onCancelSelection: () => void;
 }
 
 export const TEIContent: React.FC<TEIContentProps> = ({
@@ -12,13 +15,15 @@ export const TEIContent: React.FC<TEIContentProps> = ({
   highlightedText,
   selectedTextRange,
   isManualAlignmentMode,
+  isTextSelected,
+  onCancelSelection,
 }) => {
   const renderTEIContent = (content: string) => {
     return content.replace(
       /<span class="tei-w" data-id="([^"]+)"([^>]*)>([^<]+)<\/span>/g,
       (match, id, attrs, text) => {
         const wordId = parseInt(id.split('_')[1]);
-        const isHighlighted = highlightedText &&
+        const isHighlighted = !isManualAlignmentMode && highlightedText &&
           wordId >= highlightedText.start &&
           wordId <= highlightedText.end;
         const isInSelectedRange = selectedTextRange &&
@@ -38,7 +43,18 @@ export const TEIContent: React.FC<TEIContentProps> = ({
   };
 
   return (
-    <div className="h-[700px] overflow-y-auto p-6 bg-transparent-white rounded-lg shadow-md scrollbar-thin">
+    <div className="relative h-[700px] overflow-y-auto p-6 bg-transparent-white rounded-lg shadow-md scrollbar-thin">
+      {isManualAlignmentMode && isTextSelected && (
+        <div className="absolute top-2 right-2 z-10">
+          <Button
+            onClick={onCancelSelection}
+            size="sm"
+            className="font-serif"
+          >
+            Cancel Selection
+          </Button>
+        </div>
+      )}
       {renderedTEI ? (
         <div
           className="prose max-w-none"

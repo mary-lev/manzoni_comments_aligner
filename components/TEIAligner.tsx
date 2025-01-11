@@ -36,7 +36,8 @@ const TEIAligner: React.FC = () => {
   const [selectedTextRange, setSelectedTextRange] = useState<{ start: number, end: number } | null>(null);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [activeAlignmentCommentId, setActiveAlignmentCommentId] = useState<number | null>(null);
-  
+  const [isTextSelected, setIsTextSelected] = useState(false); // Added state variable
+
   const commentRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const textRefs = useRef<{ [key: number]: HTMLSpanElement | null }>({});
 
@@ -185,14 +186,20 @@ const TEIAligner: React.FC = () => {
   const handleTextSelection = useCallback(() => {
     if (!isManualAlignmentMode || !activeAlignmentCommentId) return;
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) return;
+    if (!selection || selection.isCollapsed) {
+      setIsTextSelected(false);
+      return;
+    }
 
     const range = selection.getRangeAt(0);
     const startContainer = range.startContainer.parentElement;
     const endContainer = range.endContainer.parentElement;
 
     if (!startContainer?.classList.contains('tei-w') ||
-      !endContainer?.classList.contains('tei-w')) return;
+      !endContainer?.classList.contains('tei-w')) {
+      setIsTextSelected(false);
+      return;
+    }
 
     const startId = parseInt(startContainer.getAttribute('data-id')?.split('_')[1] || '0');
     const endId = parseInt(endContainer.getAttribute('data-id')?.split('_')[1] || '0');
@@ -202,9 +209,17 @@ const TEIAligner: React.FC = () => {
         start: Math.min(startId, endId),
         end: Math.max(startId, endId)
       });
-      selection.removeAllRanges();
+      setIsTextSelected(true);
+    } else {
+      setIsTextSelected(false);
     }
   }, [isManualAlignmentMode, activeAlignmentCommentId]);
+
+  const handleCancelSelection = useCallback(() => {
+    setSelectedTextRange(null);
+    setIsTextSelected(false);
+    window.getSelection()?.removeAllRanges();
+  }, []);
 
   const handleSaveXML = useCallback(async (metadata: TEIMetadata) => {
     if (!selectedChapter || !alignedComments.length) return;
@@ -304,6 +319,8 @@ const TEIAligner: React.FC = () => {
                 highlightedText={highlightedText}
                 selectedTextRange={selectedTextRange}
                 isManualAlignmentMode={isManualAlignmentMode}
+                isTextSelected={isTextSelected}
+                onCancelSelection={handleCancelSelection}
               />
   
               <CommentsList
@@ -316,7 +333,12 @@ const TEIAligner: React.FC = () => {
                 setHighlightedComment={setHighlightedComment}
                 setHighlightedText={setHighlightedText}
                 commentRefs={commentRefs}
-                setIsManualAlignmentMode={setIsManualAlignmentMode}
+                setIsManualAlignmentMode={(mode) => {
+                  setIsManualAlignmentMode(mode);
+                  if (mode) {
+                    setHighlightedText(null);
+                  }
+                }}
                 setSelectedTextRange={setSelectedTextRange}
                 setActiveAlignmentCommentId={setActiveAlignmentCommentId}
                 activeAlignmentCommentId={activeAlignmentCommentId}
