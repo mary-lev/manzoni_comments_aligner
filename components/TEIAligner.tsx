@@ -1,16 +1,18 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { Alert, AlertDescription } from "../components/ui/Alert";
-import { Upload, FileText, AlertCircle, ChevronDown, Loader2 } from 'lucide-react';
+import { Upload, FileText, ChevronDown, Loader2 } from 'lucide-react';
 import { Dropdown } from "../components/ui/Dropdown";
 import { toast } from "../components/ui/toast";
 import { SaveTEIDialog } from "../components/SaveTEIDialog";
-import { alignComments, getChapters, saveTEIFile, getChapterContent, AlignedComment, Chapter, TEIMetadata } from "../services/api";
-
+import { alignComments, getChapters, saveTEIFile, AlignedComment, Chapter, TEIMetadata } from "../services/api";
+import { ChapterSelector } from '../components/ChapterSelector';
+import { FileUploader } from '../components/FileUploader';
+import { CommentsList } from '../components/CommentsList';
+import { TEIContent } from '../components/TEIContent';
 
 declare global {
   interface Window {
@@ -21,24 +23,25 @@ declare global {
 const TEIAligner: React.FC = () => {
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [chapterContent, setChapterContent] = useState<string | null>(null);
   const [renderedTEI, setRenderedTEI] = useState<string | null>(null);
   const [commentsFile, setCommentsFile] = useState<File | null>(null);
   const [commentsText, setCommentsText] = useState<string | null>(null);
   const [alignedComments, setAlignedComments] = useState<AlignedComment[]>([]);
   const [highlightedComment, setHighlightedComment] = useState<number | null>(null);
   const [highlightedText, setHighlightedText] = useState<{ start: number, end: number } | null>(null);
-  const commentRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
-  const textRefs = useRef<{ [key: number]: HTMLSpanElement | null }>({});
   const [error, setError] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isManualAlignmentMode, setIsManualAlignmentMode] = useState(false);
   const [selectedTextRange, setSelectedTextRange] = useState<{ start: number, end: number } | null>(null);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
-  const allCommentsAligned = alignedComments.length > 0 && 
-  alignedComments.every(c => c.start !== null && c.end !== null);
+  const [activeAlignmentCommentId, setActiveAlignmentCommentId] = useState<number | null>(null);
+  
+  const commentRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+  const textRefs = useRef<{ [key: number]: HTMLSpanElement | null }>({});
 
+  const allCommentsAligned = alignedComments.length > 0 && 
+    alignedComments.every(c => c.start !== null && c.end !== null);
 
   useEffect(() => {
     const fetchChapters = async () => {
@@ -60,7 +63,6 @@ const TEIAligner: React.FC = () => {
       setHighlightedText(null);
     };
 
-    // Clear highlights when chapter or comments change
     return clearHighlights;
   }, [selectedChapter, alignedComments]);
 
@@ -76,7 +78,6 @@ const TEIAligner: React.FC = () => {
         setHighlightedComment(comment.number);
         setHighlightedText({ start: comment.start!, end: comment.end! });
 
-        // Get the comment element by index and scroll to it
         const commentElement = commentRefs.current[comment.number];
         if (commentElement) {
           commentElement.scrollIntoView({
@@ -95,11 +96,15 @@ const TEIAligner: React.FC = () => {
   useEffect(() => {
     if (isManualAlignmentMode) {
       document.addEventListener('mouseup', handleTextSelection);
-      return () => document.removeEventListener('mouseup', handleTextSelection);
+      return () => {
+        document.removeEventListener('mouseup', handleTextSelection);
+        setSelectedTextRange(null);
+        setActiveAlignmentCommentId(null);
+      };
     }
   }, [isManualAlignmentMode]);
 
-  const handleChapterSelect = async (chapterId: string) => {
+  const handleChapterSelect = useCallback(async (chapterId: string) => {
     try {
       const chapter = chapters.find(c => c.id === chapterId);
       if (!chapter) throw new Error('Chapter not found');
@@ -133,9 +138,9 @@ const TEIAligner: React.FC = () => {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
       console.error(err);
     }
-  };
+  }, [chapters]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -146,9 +151,9 @@ const TEIAligner: React.FC = () => {
     } catch (err) {
       setError("Error processing comments file");
     }
-  };
+  }, []);
 
-  const handleProcess = async () => {
+  const handleProcess = useCallback(async () => {
     if (!selectedChapter || !commentsFile) {
       toast({
         title: "Missing Content",
@@ -175,14 +180,13 @@ const TEIAligner: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [selectedChapter, commentsFile]);
 
-  const handleTextSelection = () => {
-    if (!isManualAlignmentMode) return;
+  const handleTextSelection = useCallback(() => {
+    if (!isManualAlignmentMode || !activeAlignmentCommentId) return;
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) return;
 
-    // Find the first and last selected word spans
     const range = selection.getRangeAt(0);
     const startContainer = range.startContainer.parentElement;
     const endContainer = range.endContainer.parentElement;
@@ -198,122 +202,11 @@ const TEIAligner: React.FC = () => {
         start: Math.min(startId, endId),
         end: Math.max(startId, endId)
       });
-      // Clear selection
       selection.removeAllRanges();
     }
-  };
+  }, [isManualAlignmentMode, activeAlignmentCommentId]);
 
-  const renderTEIContent = (content: string) => {
-    const handleWordClick = (wordId: number) => {
-      const comment = alignedComments.find(c =>
-        c.start !== null &&
-        c.end !== null &&
-        c.start <= wordId &&
-        c.end >= wordId
-      );
-      if (comment && comment.start !== null && comment.end !== null) {
-        setHighlightedComment(comment.number);
-        setHighlightedText({ start: comment.start, end: comment.end });
-        commentRefs.current[comment.number]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    };
-
-    // Add classes and click handlers to each word span
-    return content.replace(
-      /<span class="tei-w" data-id="([^"]+)"([^>]*)>([^<]+)<\/span>/g,
-      (match, id, attrs, text) => {
-        const wordId = parseInt(id.split('_')[1]);
-        const isHighlighted = highlightedText &&
-          wordId >= highlightedText.start &&
-          wordId <= highlightedText.end;
-        const isInSelectedRange = selectedTextRange &&
-          wordId >= selectedTextRange.start &&
-          wordId <= selectedTextRange.end;
-
-        return `<span 
-          class="tei-w ${isHighlighted ? 'bg-yellow-200' : ''} 
-                 ${isInSelectedRange ? 'bg-accent/20' : ''} 
-                 ${isManualAlignmentMode ? 'cursor-text' : 'cursor-pointer'}"
-          data-id="${id}"
-          id="word-${wordId}"
-          ${!isManualAlignmentMode ? `onclick="window.handleWordClick(${wordId})"` : ''}
-          ${attrs}>${text}</span>`;
-      }
-    );
-  };
-
-  const renderComment = (comment: AlignedComment, index: number) => {
-    const hasError = !comment.start || !comment.end;
-    const isHighlighted = highlightedComment === comment.number;
-
-    const handleCommentClick = () => {
-      if (isManualAlignmentMode && selectedTextRange) {
-        // Update the comment's alignment
-        const updatedComments = alignedComments.map(c =>
-          c.number === comment.number
-            ? {
-              ...c,
-              start: selectedTextRange.start,
-              end: selectedTextRange.end,
-              status: 'OK'
-            }
-            : c
-        );
-        setAlignedComments(updatedComments);
-        setSelectedTextRange(null);
-        return;
-      }
-
-      if (comment.start && comment.end) {
-        setHighlightedComment(comment.number);
-        setHighlightedText({ start: comment.start, end: comment.end });
-        const element = document.getElementById(`word-${comment.start}`);
-        if (element) {
-          element.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center'
-          });
-        }
-      }
-    };
-
-    const setCommentRef = (el: HTMLDivElement | null) => {
-      if (el) {
-        commentRefs.current[comment.number] = el;
-      }
-    };
-
-    return (
-      <div
-        key={index}
-        ref={setCommentRef}
-        className={`mb-4 p-4 rounded-lg transition-all duration-200 ${hasError ? 'border-2 border-red-300 bg-red-50/50' :
-            isHighlighted ? 'bg-yellow-100/50' : 'bg-white/50'
-          } ${isManualAlignmentMode && hasError ? 'cursor-pointer ring-2 ring-offset-2 ring-accent/50' : ''}`}
-        onClick={handleCommentClick}
-      >
-        <div className="flex justify-between items-center mb-2">
-          <span className="font-semibold">Comment {comment.number}</span>
-          {hasError && isManualAlignmentMode && (
-            <span className="text-sm text-accent">
-              Click to align with selected text
-            </span>
-          )}
-        </div>
-        <div className="comment-reference">
-          <span dangerouslySetInnerHTML={{ __html: comment.text }} />
-        </div>
-        <div className="mt-2">{comment.comment}</div>
-        <div className="text-sm text-gray-600 mt-2">
-          Status: {comment.status},
-          Start: {comment.start !== null ? comment.start : 'N/A'},
-          End: {comment.end !== null ? comment.end : 'N/A'}
-        </div>
-      </div>
-    );
-  };
-
-  const handleSaveXML = async (metadata: TEIMetadata) => {
+  const handleSaveXML = useCallback(async (metadata: TEIMetadata) => {
     if (!selectedChapter || !alignedComments.length) return;
   
     try {
@@ -324,7 +217,6 @@ const TEIAligner: React.FC = () => {
         alignedComments
       );
       
-      // Create and download the file
       const blob = new Blob([xmlContent], { type: 'application/xml' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -349,52 +241,26 @@ const TEIAligner: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  };
-
+  }, [selectedChapter, alignedComments]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8f4e9] to-[#f0e8d5] py-12">
       <div className="max-w-[1600px] mx-auto px-4">
         <Card className="bg-transparent-white backdrop-blur-sm shadow-md rounded-xl overflow-hidden mb-8 card-hover border-accent/20">
-          {/* Common Header */}
           <CardHeader className="border-b border-accent/20 bg-transparent-primary">
             <CardTitle className="text-3xl font-bold text-primary font-display">TEI Comment Aligner</CardTitle>
           </CardHeader>
   
-          {/* Card Content */}
           <CardContent className="p-6">
-            {/* Controls Section */}
             <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8">
-              {/* Chapter Dropdown */}
-              <div className="w-full md:w-auto">
-                <Dropdown
-                  isOpen={isDropdownOpen}
-                  onClose={() => setIsDropdownOpen(false)}
-                  trigger={
-                    <div
-                      className="flex items-center justify-between w-full md:w-64 px-4 py-2 border border-accent/30 rounded-md cursor-pointer hover:bg-accent/5 transition-colors duration-200"
-                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    >
-                      <span className="text-primary font-serif">
-                        {selectedChapter ? selectedChapter.name : 'Select Chapter'}
-                      </span>
-                      <ChevronDown className="w-4 h-4 ml-2 text-primary/60" />
-                    </div>
-                  }
-                >
-                  {chapters.map((chapter) => (
-                    <div
-                      key={chapter.id}
-                      className="px-4 py-2 hover:bg-accent/10 cursor-pointer transition-colors duration-200 font-serif"
-                      onClick={() => handleChapterSelect(chapter.id)}
-                    >
-                      {chapter.name}
-                    </div>
-                  ))}
-                </Dropdown>
-              </div>
+              <ChapterSelector
+                chapters={chapters}
+                selectedChapter={selectedChapter}
+                onChapterSelect={handleChapterSelect}
+                isDropdownOpen={isDropdownOpen}
+                setIsDropdownOpen={setIsDropdownOpen}
+              />
   
-              {/* Align Button */}
               <div className="flex items-center gap-4 w-full md:w-auto">
                 <Button
                   onClick={handleProcess}
@@ -410,107 +276,57 @@ const TEIAligner: React.FC = () => {
                     'Align Comments'
                   )}
                 </Button>
+                {allCommentsAligned && (
+                  <Button
+                    onClick={() => setIsSaveDialogOpen(true)}
+                    className="bg-accent hover:bg-accent/90 text-white font-serif text-lg px-8 py-6 rounded-lg"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Save TEI File
+                  </Button>
+                )}
+                <SaveTEIDialog
+                  isOpen={isSaveDialogOpen}
+                  onClose={() => setIsSaveDialogOpen(false)}
+                  onSave={handleSaveXML}
+                />
               </div>
   
-              {/* File Upload */}
-              <div className="flex items-center gap-4 w-full md:w-auto">
-                <Button
-                  variant="outline"
-                  className="relative w-full md:w-auto bg-transparent-white hover:bg-accent/10 text-primary border-accent/30 hover:border-accent/50 transition-colors duration-200 font-serif"
-                >
-                  <input
-                    type="file"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    onChange={handleFileUpload}
-                    accept=".txt"
-                  />
-                  <Upload className="w-4 h-4 mr-2" />
-                  Choose Comments File
-                </Button>
-                {commentsFile && (
-                  <span className="text-sm text-accent flex items-center bg-accent/10 backdrop-blur-sm px-3 py-1 rounded-full font-serif">
-                    <FileText className="w-4 h-4 mr-2" />
-                    {commentsFile.name}
-                  </span>
-                )}
-              </div>
+              <FileUploader
+                commentsFile={commentsFile}
+                onFileUpload={handleFileUpload}
+              />
             </div>
   
-            {/* Two-Column Layout */}
             <div className="grid md:grid-cols-2 gap-8">
-              {/* TEI Content */}
-              <div className="h-[700px] overflow-y-auto p-6 bg-transparent-white rounded-lg shadow-md scrollbar-thin">
-                {renderedTEI ? (
-                  <div
-                    className="prose max-w-none"
-                    dangerouslySetInnerHTML={{
-                      __html: renderTEIContent(renderedTEI), // Render TEI Content
-                    }}
-                  />
-                ) : (
-                  <pre className="text-sm font-serif whitespace-pre-wrap">
-                    {chapterContent}
-                  </pre>
-                )}
-              </div>
+              <TEIContent
+                renderedTEI={renderedTEI}
+                highlightedText={highlightedText}
+                selectedTextRange={selectedTextRange}
+                isManualAlignmentMode={isManualAlignmentMode}
+              />
   
-              {/* Aligned Comments or Raw Comments */}
-              <div className="h-[700px] overflow-y-auto p-6 bg-transparent-white rounded-lg shadow-md scrollbar-thin">
-                {alignedComments.length > 0 ? (
-                  alignedComments.map((comment, index) => renderComment(comment, index)) // Render aligned comments
-                ) : (
-                  commentsText && (
-                    <pre className="text-sm font-serif whitespace-pre-wrap">
-                      {commentsText}
-                    </pre>
-                  )
-                )}
-              </div>
+              <CommentsList
+                alignedComments={alignedComments}
+                commentsText={commentsText}
+                highlightedComment={highlightedComment}
+                isManualAlignmentMode={isManualAlignmentMode}
+                selectedTextRange={selectedTextRange}
+                setAlignedComments={setAlignedComments}
+                setHighlightedComment={setHighlightedComment}
+                setHighlightedText={setHighlightedText}
+                commentRefs={commentRefs}
+                setIsManualAlignmentMode={setIsManualAlignmentMode}
+                setSelectedTextRange={setSelectedTextRange}
+                setActiveAlignmentCommentId={setActiveAlignmentCommentId}
+                activeAlignmentCommentId={activeAlignmentCommentId}
+              />
             </div>
           </CardContent>
         </Card>
-  
-        {/* Additional Sections */}
-        {(renderedTEI || alignedComments.length > 0) && (
-          <>
-            {/* Alignment Button */}
-            <div className="flex justify-center gap-4 mt-6">
-              {alignedComments.some(c => !c.start || !c.end) && (
-                <Button
-                  onClick={() => {
-                    setIsManualAlignmentMode(!isManualAlignmentMode);
-                    setSelectedTextRange(null);
-                  }}
-                  variant={isManualAlignmentMode ? "default" : "outline"}
-                  className="font-serif"
-                >
-                  {isManualAlignmentMode ? 'Exit Manual Alignment' : 'Manual Alignment'}
-                </Button>
-              )}
-  
-              {allCommentsAligned && (
-                <Button
-                  onClick={() => setIsSaveDialogOpen(true)}
-                  variant="outline"
-                  className="font-serif bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Save TEI File
-                </Button>
-              )}
-  
-              <SaveTEIDialog
-                isOpen={isSaveDialogOpen}
-                onClose={() => setIsSaveDialogOpen(false)}
-                onSave={handleSaveXML}
-              />
-            </div>
-          </>
-        )}
       </div>
     </div>
   );
-  
 };
 
 export default TEIAligner;
