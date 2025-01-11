@@ -38,6 +38,7 @@ const TEIAligner: React.FC = () => {
   const [activeAlignmentCommentId, setActiveAlignmentCommentId] = useState<number | null>(null);
   const [isTextSelected, setIsTextSelected] = useState(false); // Added state variable
 
+
   const commentRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const textRefs = useRef<{ [key: number]: HTMLSpanElement | null }>({});
 

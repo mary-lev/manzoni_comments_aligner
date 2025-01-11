@@ -7,6 +7,6 @@
     }
   ],
   "env": {
-    "NEXT_PUBLIC_API_URL": "https://aligner-backend.onrender.com/docs"
+    "NEXT_PUBLIC_API_URL": "https://aligner-backend.onrender.com/"
   }
 }

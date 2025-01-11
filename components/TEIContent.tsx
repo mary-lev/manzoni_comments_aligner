@@ -31,7 +31,7 @@ export const TEIContent: React.FC<TEIContentProps> = ({
           wordId <= selectedTextRange.end;
 
         return `<span 
-          class="tei-w ${isHighlighted ? 'bg-yellow-200' : ''} 
+          class="tei-w ${isHighlighted ? 'bg-amber-100/70' : ''}
                  ${isInSelectedRange ? 'bg-accent/20' : ''} 
                  ${isManualAlignmentMode ? 'cursor-text' : 'cursor-pointer'}"
           data-id="${id}"

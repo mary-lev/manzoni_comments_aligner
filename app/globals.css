@@ -65,7 +65,7 @@
 }
 
 .tei-w.highlighted {
-  @apply bg-yellow-200/50;
+  @apply bg-accent/20;
 }
 
 .tei-head {
