@@ -356,11 +356,15 @@ const TEIAligner: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-[#f8f4e9] to-[#f0e8d5] py-12">
       <div className="max-w-[1600px] mx-auto px-4">
         <Card className="bg-transparent-white backdrop-blur-sm shadow-md rounded-xl overflow-hidden mb-8 card-hover border-accent/20">
+          {/* Common Header */}
           <CardHeader className="border-b border-accent/20 bg-transparent-primary">
             <CardTitle className="text-3xl font-bold text-primary font-display">TEI Comment Aligner</CardTitle>
           </CardHeader>
-          <CardContent className="mt-6 p-6">
-            <div className="flex flex-col md:flex-row justify-between items-start gap-6">
+  
+          {/* Card Content */}
+          <CardContent className="p-6">
+            {/* Controls Section */}
+            <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8">
               {/* Chapter Dropdown */}
               <div className="w-full md:w-auto">
                 <Dropdown
@@ -389,27 +393,31 @@ const TEIAligner: React.FC = () => {
                   ))}
                 </Dropdown>
               </div>
-
+  
+              {/* Align Button */}
               <div className="flex items-center gap-4 w-full md:w-auto">
-              <Button
-                onClick={handleProcess}
-                disabled={isProcessing || !selectedChapter || !commentsFile}
-                className="bg-accent hover:bg-accent/90 text-white font-serif text-lg px-8 py-6 rounded-lg"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  'Align Comments'
-                )}
-              </Button>
+                <Button
+                  onClick={handleProcess}
+                  disabled={isProcessing || !selectedChapter || !commentsFile}
+                  className="bg-accent hover:bg-accent/90 text-white font-serif text-lg px-8 py-6 rounded-lg"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    'Align Comments'
+                  )}
+                </Button>
               </div>
-
+  
               {/* File Upload */}
               <div className="flex items-center gap-4 w-full md:w-auto">
-                <Button variant="outline" className="relative w-full md:w-auto bg-transparent-white hover:bg-accent/10 text-primary border-accent/30 hover:border-accent/50 transition-colors duration-200 font-serif">
+                <Button
+                  variant="outline"
+                  className="relative w-full md:w-auto bg-transparent-white hover:bg-accent/10 text-primary border-accent/30 hover:border-accent/50 transition-colors duration-200 font-serif"
+                >
                   <input
                     type="file"
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -427,73 +435,46 @@ const TEIAligner: React.FC = () => {
                 )}
               </div>
             </div>
-
-            {/* Error Display */}
-            {error && (
-              <Alert variant="destructive" className="mt-6 bg-destructive/10 backdrop-blur-sm">
-                <AlertCircle className="h-4 w-4 mr-2" />
-                <AlertDescription className="font-serif">{error}</AlertDescription>
-              </Alert>
-            )}
+  
+            {/* Two-Column Layout */}
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* TEI Content */}
+              <div className="h-[700px] overflow-y-auto p-6 bg-transparent-white rounded-lg shadow-md scrollbar-thin">
+                {renderedTEI ? (
+                  <div
+                    className="prose max-w-none"
+                    dangerouslySetInnerHTML={{
+                      __html: renderTEIContent(renderedTEI), // Render TEI Content
+                    }}
+                  />
+                ) : (
+                  <pre className="text-sm font-serif whitespace-pre-wrap">
+                    {chapterContent}
+                  </pre>
+                )}
+              </div>
+  
+              {/* Aligned Comments or Raw Comments */}
+              <div className="h-[700px] overflow-y-auto p-6 bg-transparent-white rounded-lg shadow-md scrollbar-thin">
+                {alignedComments.length > 0 ? (
+                  alignedComments.map((comment, index) => renderComment(comment, index)) // Render aligned comments
+                ) : (
+                  commentsText && (
+                    <pre className="text-sm font-serif whitespace-pre-wrap">
+                      {commentsText}
+                    </pre>
+                  )
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
-
-        {/* Split View */}
+  
+        {/* Additional Sections */}
         {(renderedTEI || alignedComments.length > 0) && (
           <>
-            <div className="grid md:grid-cols-2 gap-8 mb-6">
-              {/* TEI Content */}
-              <Card className="bg-transparent-white backdrop-blur-sm shadow-md rounded-xl overflow-hidden card-hover border-accent/20">
-                <CardHeader className="border-b border-accent/20 bg-transparent-primary">
-                  <CardTitle className="text-primary font-display">
-                    {selectedChapter ? selectedChapter.name : ''} Content
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="h-[700px] overflow-y-auto p-6 scrollbar-thin">
-                    {renderedTEI ? (
-                      <div
-                        className="prose max-w-none"
-                        dangerouslySetInnerHTML={{
-                          __html: renderTEIContent(renderedTEI)  // Use renderTEIContent here
-                        }}
-                      />
-                    ) : (
-                      <pre className="text-sm font-serif whitespace-pre-wrap bg-transparent-white backdrop-blur-sm p-4 rounded-lg">
-                        {chapterContent}
-                      </pre>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Aligned Comments or Raw Comments */}
-              <Card className="bg-transparent-white backdrop-blur-sm shadow-md rounded-xl overflow-hidden card-hover border-accent/20">
-                <CardHeader className="border-b border-accent/20 bg-transparent-primary">
-                  <CardTitle className="text-primary font-display">
-                    {alignedComments.length > 0 ? 'Aligned Comments' : 'Comments'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="h-[700px] overflow-y-auto p-6 scrollbar-thin">
-                    {alignedComments.length > 0 ? (
-                      // Use renderComment for each aligned comment
-                      alignedComments.map((comment, index) => renderComment(comment, index))
-                    ) : (
-                      // Raw comments view
-                      commentsText && (
-                        <pre className="text-sm font-serif whitespace-pre-wrap bg-transparent-white backdrop-blur-sm p-4 rounded-lg">
-                          {commentsText}
-                        </pre>
-                      )
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
             {/* Alignment Button */}
-            <div className="flex justify-center gap-4">
+            <div className="flex justify-center gap-4 mt-6">
               {alignedComments.some(c => !c.start || !c.end) && (
                 <Button
                   onClick={() => {
@@ -506,7 +487,7 @@ const TEIAligner: React.FC = () => {
                   {isManualAlignmentMode ? 'Exit Manual Alignment' : 'Manual Alignment'}
                 </Button>
               )}
-
+  
               {allCommentsAligned && (
                 <Button
                   onClick={() => setIsSaveDialogOpen(true)}
@@ -517,7 +498,7 @@ const TEIAligner: React.FC = () => {
                   Save TEI File
                 </Button>
               )}
-
+  
               <SaveTEIDialog
                 isOpen={isSaveDialogOpen}
                 onClose={() => setIsSaveDialogOpen(false)}
@@ -529,6 +510,7 @@ const TEIAligner: React.FC = () => {
       </div>
     </div>
   );
+  
 };
 
 export default TEIAligner;

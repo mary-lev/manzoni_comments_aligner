@@ -52,7 +52,7 @@
   <!-- Handle figure elements -->
   <xsl:template match="figure">
     <figure class="tei-figure">
-      <img src="{@url}" alt="Figure"/>
+      <!-- <img src="{@url}" alt="Figure"/> -->
     </figure>
   </xsl:template>
 
