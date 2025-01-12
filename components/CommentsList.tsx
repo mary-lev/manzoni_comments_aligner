@@ -1,6 +1,8 @@
 import React from 'react';
 import { AlignedComment } from "../services/api";
 import { Button } from "./ui/Button";
+import { X } from 'lucide-react';
+
 
 interface CommentsListProps {
   alignedComments: AlignedComment[];
@@ -37,6 +39,12 @@ export const CommentsList: React.FC<CommentsListProps> = ({
     const isAligned = comment.start !== null && comment.end !== null;
     const isHighlighted = highlightedComment === comment.number;
     const isActiveForAlignment = activeAlignmentCommentId === comment.number;
+
+    const handleCancelAlignment = () => {
+        setIsManualAlignmentMode(false);
+        setSelectedTextRange(null);
+        setActiveAlignmentCommentId(null);
+      };
 
     const handleAlignmentClick = () => {
       if (!isManualAlignmentMode) {
@@ -82,53 +90,67 @@ export const CommentsList: React.FC<CommentsListProps> = ({
     };
 
     return (
-      <div
-        key={index}
-        ref={setCommentRef}
-        className={`mb-4 p-4 rounded-lg transition-all duration-200 ${
-          isAligned ? (isHighlighted ? 'bg-yellow-100/50' : 'bg-white/50') : 'border-2 border-red-300 bg-red-50/50'
-        } ${isActiveForAlignment ? 'ring-2 ring-accent ring-offset-2' : ''}`}
-      >
-        <div className="flex justify-between items-center mb-2">
-          <span className="font-semibold">Comment {comment.number}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleAlignmentClick}
-            className="text-sm text-accent hover:text-accent-dark"
-          >
-            {!isAligned && !isManualAlignmentMode && "Click to align with the text"}
-            {isAligned && !isManualAlignmentMode && "Click to change the alignment"}
-            {isManualAlignmentMode && isActiveForAlignment && selectedTextRange && "Align!"}
-            {isManualAlignmentMode && isActiveForAlignment && !selectedTextRange && "Select text to align"}
-            {isManualAlignmentMode && !isActiveForAlignment && "Alignment in progress"}
-          </Button>
+        <div
+          key={index}
+          ref={setCommentRef}
+          className={`mb-4 p-4 rounded-lg transition-all duration-200 ${
+            isAligned ? (isHighlighted ? 'bg-yellow-100/50' : 'bg-white/50') : 'border-2 border-red-300 bg-red-50/50'
+          } ${isActiveForAlignment ? 'ring-2 ring-accent ring-offset-2' : ''}`}
+        >
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-semibold">Comment {comment.number}</span>
+            <div className="flex items-center gap-2">
+              {isManualAlignmentMode && isActiveForAlignment && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancelAlignment}
+                  className="text-sm text-red-500 hover:text-red-600 hover:bg-red-50"
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Cancel
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleAlignmentClick}
+                className={`text-sm ${isManualAlignmentMode && isActiveForAlignment && selectedTextRange 
+                  ? 'text-green-600 hover:text-green-700 hover:bg-green-50' 
+                  : 'text-accent hover:text-accent-dark'}`}
+              >
+                {!isAligned && !isManualAlignmentMode && "Click to align with the text"}
+                {isAligned && !isManualAlignmentMode && "Click to change the alignment"}
+                {isManualAlignmentMode && isActiveForAlignment && selectedTextRange && "Align!"}
+                {isManualAlignmentMode && isActiveForAlignment && !selectedTextRange && "Select text to align"}
+                {isManualAlignmentMode && !isActiveForAlignment && "Alignment in progress"}
+              </Button>
+            </div>
+          </div>
+          <div className="comment-reference" onClick={handleCommentClick}>
+            <span dangerouslySetInnerHTML={{ __html: comment.text }} />
+          </div>
+          <div className="mt-2">{comment.comment}</div>
+          <div className="text-sm text-gray-600 mt-2">
+            Status: {comment.status},
+            Start: {comment.start !== null ? comment.start : 'N/A'},
+            End: {comment.end !== null ? comment.end : 'N/A'}
+          </div>
         </div>
-        <div className="comment-reference" onClick={handleCommentClick}>
-          <span dangerouslySetInnerHTML={{ __html: comment.text }} />
-        </div>
-        <div className="mt-2">{comment.comment}</div>
-        <div className="text-sm text-gray-600 mt-2">
-          Status: {comment.status},
-          Start: {comment.start !== null ? comment.start : 'N/A'},
-          End: {comment.end !== null ? comment.end : 'N/A'}
-        </div>
+      );
+    };
+  
+    return (
+      <div className="h-[700px] overflow-y-auto p-6 bg-transparent-white rounded-lg shadow-md scrollbar-thin">
+        {alignedComments.length > 0 ? (
+          alignedComments.map((comment, index) => renderComment(comment, index))
+        ) : (
+          commentsText && (
+            <pre className="text-sm font-serif whitespace-pre-wrap">
+              {commentsText}
+            </pre>
+          )
+        )}
       </div>
     );
   };
-
-  return (
-    <div className="h-[700px] overflow-y-auto p-6 bg-transparent-white rounded-lg shadow-md scrollbar-thin">
-      {alignedComments.length > 0 ? (
-        alignedComments.map((comment, index) => renderComment(comment, index))
-      ) : (
-        commentsText && (
-          <pre className="text-sm font-serif whitespace-pre-wrap">
-            {commentsText}
-          </pre>
-        )
-      )}
-    </div>
-  );
-};
-

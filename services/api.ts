@@ -53,12 +53,22 @@ export interface TEIMetadata {
     return data.aligned;
   }
   
-  export async function getChapters(): Promise<Chapter[]> {
-    const response = await fetch(`${API_BASE}/chapters`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch chapters');
-    }
-    return await response.json();
+  export interface Chapter {
+    id: string;
+    name: string;
+  }
+  
+  export function getChapters(): Promise<Chapter[]> {
+    const chapters: Chapter[] = [
+      { id: "intro", name: "Introduction" },
+      ...Array.from({ length: 38 }, (_, i) => ({
+        id: `cap${i + 1}`,
+        name: `Chapter ${i + 1}`
+      })),
+      { id: "header", name: "Chapter header" }
+    ];
+    
+    return Promise.resolve(chapters);
   }
   
   export async function getChapterContent(chapterId: string): Promise<string> {

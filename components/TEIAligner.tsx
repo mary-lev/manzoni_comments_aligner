@@ -13,6 +13,7 @@ import { ChapterSelector } from '../components/ChapterSelector';
 import { FileUploader } from '../components/FileUploader';
 import { CommentsList } from '../components/CommentsList';
 import { TEIContent } from '../components/TEIContent';
+import { SaveTEIButton } from '../components/SaveTEIButton';
 
 declare global {
   interface Window {
@@ -42,7 +43,7 @@ const TEIAligner: React.FC = () => {
   const commentRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const textRefs = useRef<{ [key: number]: HTMLSpanElement | null }>({});
 
-  const allCommentsAligned = alignedComments.length > 0 && 
+  const allCommentsAligned = alignedComments.length > 0 &&
     alignedComments.every(c => c.start !== null && c.end !== null);
 
   useEffect(() => {
@@ -142,8 +143,23 @@ const TEIAligner: React.FC = () => {
     }
   }, [chapters]);
 
+  const resetCommentStates = useCallback(() => {
+    setCommentsFile(null);
+    setCommentsText(null);
+    setAlignedComments([]);
+    setHighlightedComment(null);
+    setHighlightedText(null);
+    setSelectedTextRange(null);
+    setActiveAlignmentCommentId(null);
+    setIsManualAlignmentMode(false);
+  }, []);
+
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+
+    // Reset states first
+    resetCommentStates();
+
     if (!file) return;
 
     try {
@@ -152,8 +168,18 @@ const TEIAligner: React.FC = () => {
       setCommentsText(text);
     } catch (err) {
       setError("Error processing comments file");
+      toast({
+        title: "Error",
+        description: "Failed to process the comments file.",
+        variant: "destructive",
+      });
     }
-  }, []);
+  }, [resetCommentStates]);
+
+  const handleClearFile = useCallback(() => {
+    resetCommentStates();
+  }, [resetCommentStates]);
+
 
   const handleProcess = useCallback(async () => {
     if (!selectedChapter || !commentsFile) {
@@ -222,9 +248,9 @@ const TEIAligner: React.FC = () => {
     window.getSelection()?.removeAllRanges();
   }, []);
 
-  const handleSaveXML = useCallback(async (metadata: TEIMetadata) => {
+  const handleSaveXML = useCallback(async (metadata: TEIMetadata, editorFilename: string) => {
     if (!selectedChapter || !alignedComments.length) return;
-  
+
     try {
       setIsProcessing(true);
       const xmlContent = await saveTEIFile(
@@ -232,17 +258,23 @@ const TEIAligner: React.FC = () => {
         metadata,
         alignedComments
       );
-      
+
       const blob = new Blob([xmlContent], { type: 'application/xml' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${metadata.author}_${selectedChapter.id}.xml`;
+      
+      // Determine the source name (intro or cap number)
+      const source = selectedChapter.id.toLowerCase().includes('intro') ? 'intro' : selectedChapter.id;
+      
+      // Use editor's filename with source for downloaded file
+      a.download = `${editorFilename}_${source}.xml`;
+      
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-  
+
       setIsSaveDialogOpen(false);
       toast({
         title: "Success",
@@ -266,7 +298,7 @@ const TEIAligner: React.FC = () => {
           <CardHeader className="border-b border-accent/20 bg-transparent-primary">
             <CardTitle className="text-3xl font-bold text-primary font-display">TEI Comment Aligner</CardTitle>
           </CardHeader>
-  
+
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8">
               <ChapterSelector
@@ -276,7 +308,7 @@ const TEIAligner: React.FC = () => {
                 isDropdownOpen={isDropdownOpen}
                 setIsDropdownOpen={setIsDropdownOpen}
               />
-  
+
               <div className="flex items-center gap-4 w-full md:w-auto">
                 <Button
                   onClick={handleProcess}
@@ -292,28 +324,27 @@ const TEIAligner: React.FC = () => {
                     'Align Comments'
                   )}
                 </Button>
-                {allCommentsAligned && (
-                  <Button
-                    onClick={() => setIsSaveDialogOpen(true)}
-                    className="bg-accent hover:bg-accent/90 text-white font-serif text-lg px-8 py-6 rounded-lg"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Save TEI File
-                  </Button>
+                {alignedComments.length > 0 && (
+                  <SaveTEIButton
+                    alignedComments={alignedComments}
+                    onSave={() => setIsSaveDialogOpen(true)}
+                  />
                 )}
                 <SaveTEIDialog
                   isOpen={isSaveDialogOpen}
                   onClose={() => setIsSaveDialogOpen(false)}
                   onSave={handleSaveXML}
+                  selectedChapter={selectedChapter?.id || ''}
                 />
               </div>
-  
+
               <FileUploader
                 commentsFile={commentsFile}
                 onFileUpload={handleFileUpload}
+                onClearFile={handleClearFile}
               />
             </div>
-  
+
             <div className="grid md:grid-cols-2 gap-8">
               <TEIContent
                 renderedTEI={renderedTEI}
@@ -323,7 +354,7 @@ const TEIAligner: React.FC = () => {
                 isTextSelected={isTextSelected}
                 onCancelSelection={handleCancelSelection}
               />
-  
+
               <CommentsList
                 alignedComments={alignedComments}
                 commentsText={commentsText}
