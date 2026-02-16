@@ -29,12 +29,24 @@ export function parseXMLComments(xmlString: string): AlignedComment[] {
     const refEl = note.getElementsByTagNameNS(ns, 'ref')[0];
     const refText = refEl ? refEl.textContent || '' : '';
 
-    // Extract the comment body: everything after <ref> in the note's text content
-    // We get the full text and remove the ref portion
-    const fullText = note.textContent || '';
-    const comment = refEl
-      ? fullText.substring((refEl.textContent || '').length).replace(/^:\s*/, '').trim()
-      : fullText.trim();
+    // Extract the comment body: collect text from all nodes after <ref>
+    let comment = '';
+    if (refEl) {
+      let foundRef = false;
+      for (let j = 0; j < note.childNodes.length; j++) {
+        const child = note.childNodes[j];
+        if (child === refEl) {
+          foundRef = true;
+          continue;
+        }
+        if (foundRef) {
+          comment += child.textContent || '';
+        }
+      }
+      comment = comment.replace(/^:\s*/, '').trim();
+    } else {
+      comment = (note.textContent || '').trim();
+    }
 
     const status = (start !== null && end !== null) ? 'OK' : 'ERROR';
 

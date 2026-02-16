@@ -91,26 +91,47 @@ yarn dev
 ├── components/
 │   ├── ChapterSelector.tsx     # Chapter selection dropdown
 │   ├── CommentsList.tsx        # Comments display and management
-│   ├── FileUploader.tsx        # File upload component
+│   ├── FileUploader.tsx        # File upload (.txt and .xml)
 │   ├── SaveTEIDialog.tsx       # TEI save dialog with metadata
-│   ├── TEIContent.tsx          # TEI text display
+│   ├── SaveTEIButton.tsx       # Save button with alignment status
+│   ├── TEIAligner.tsx          # Main orchestration component
+│   ├── TEIContent.tsx          # TEI text display with highlighting
+│   ├── XMLFileSelector.tsx     # Editor/chapter selector for XML review
 │   └── ui/                     # Shared UI components
-├── pages/
-│   └── index.tsx              # Main application page
+├── app/
+│   ├── layout.tsx             # Root layout with fonts and toaster
+│   ├── page.tsx               # Main page
+│   └── globals.css            # Global styles
 ├── services/
-│   └── api.ts                 # API client functions
-└── styles/
-    └── globals.css            # Global styles
+│   ├── api.ts                 # Backend API client
+│   └── xmlComments.ts         # Client-side XML parsing and patching
+└── public/data/
+    ├── comments/              # XML comment files by editor
+    │   ├── index.json         # Editor → chapters index
+    │   └── {Editor}/{ch}.xml  # Comment files
+    └── tei/                   # Chapter TEI source files
 ```
 
 ## Usage
 
-1. Select a chapter from the dropdown menu
-2. Upload a comments file (.txt format)
-3. Click "Align Comments" to process
+### Review an existing XML comment file
+
+1. Select a **chapter** from the dropdown (left)
+2. Select an **editor** from the "Review XML" dropdown (right) — comments load automatically
+3. Click any **comment** to highlight its aligned fragment in the text
+4. To **fix an alignment**: click "Click to change the alignment" on the comment, select the correct words in the text, click "Align!"
+5. When done, click **Download XML** — only changed alignments are updated, everything else stays intact
+
+You can also upload an `.xml` file directly via "Choose Comments File".
+
+### Align new comments from a .txt file
+
+1. Select a **chapter** from the dropdown
+2. Click **Choose Comments File** and pick a `.txt` file
+3. Click **Align Comments** to process
 4. Review alignments:
-   - Green: Successfully aligned
-   - Red: Needs manual alignment
+   - White background: successfully aligned
+   - Red border: needs manual alignment
 5. Use manual alignment mode if needed:
    - Click "Click to align with text"
    - Select text in the TEI content
