@@ -35,7 +35,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
           type="file"
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           onChange={onFileUpload}
-          accept=".txt"
+          accept=".txt,.xml"
         />
         <Upload className="w-4 h-4 mr-2" />
         Choose Comments File

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Lora, Playfair_Display } from 'next/font/google'
+import { Toaster } from 'sonner'
 
 import './globals.css'
 
@@ -27,6 +28,7 @@ export default function RootLayout({
     <html lang="en" className={`${lora.variable} ${playfair.variable}`}>
       <body className="font-serif bg-gradient-to-br from-[#f8f4e9] to-[#f0e8d5]">
         {children}
+        <Toaster position="bottom-right" richColors />
       </body>
     </html>
   )

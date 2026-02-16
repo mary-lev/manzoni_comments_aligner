@@ -1,4 +1,6 @@
 // components/ui/toast.tsx
+import { toast as sonnerToast } from 'sonner';
+
 type ToastProps = {
   title: string;
   description: string;
@@ -6,5 +8,9 @@ type ToastProps = {
 };
 
 export const toast = ({ title, description, variant = 'default' }: ToastProps) => {
-  console.log(`[${variant.toUpperCase()}] ${title}: ${description}`);
+  if (variant === 'destructive') {
+    sonnerToast.error(title, { description });
+  } else {
+    sonnerToast.success(title, { description });
+  }
 };

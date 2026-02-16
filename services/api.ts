@@ -53,11 +53,6 @@ export interface TEIMetadata {
     return data.aligned;
   }
   
-  export interface Chapter {
-    id: string;
-    name: string;
-  }
-  
   export function getChapters(): Promise<Chapter[]> {
     const chapters: Chapter[] = [
       { id: "intro", name: "Introduction" },

@@ -14,6 +14,8 @@ import { FileUploader } from '../components/FileUploader';
 import { CommentsList } from '../components/CommentsList';
 import { TEIContent } from '../components/TEIContent';
 import { SaveTEIButton } from '../components/SaveTEIButton';
+import { XMLFileSelector } from '../components/XMLFileSelector';
+import { patchXMLComments, parseXMLComments, parseChapterFromTarget } from '../services/xmlComments';
 
 declare global {
   interface Window {
@@ -37,14 +39,14 @@ const TEIAligner: React.FC = () => {
   const [selectedTextRange, setSelectedTextRange] = useState<{ start: number, end: number } | null>(null);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [activeAlignmentCommentId, setActiveAlignmentCommentId] = useState<number | null>(null);
-  const [isTextSelected, setIsTextSelected] = useState(false); // Added state variable
+  const [isTextSelected, setIsTextSelected] = useState(false);
+  const [isReviewMode, setIsReviewMode] = useState(false);
+  const [originalXML, setOriginalXML] = useState<string | null>(null);
+  const [reviewEditorName, setReviewEditorName] = useState<string>('');
 
 
   const commentRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
   const textRefs = useRef<{ [key: number]: HTMLSpanElement | null }>({});
-
-  const allCommentsAligned = alignedComments.length > 0 &&
-    alignedComments.every(c => c.start !== null && c.end !== null);
 
   useEffect(() => {
     const fetchChapters = async () => {
@@ -96,17 +98,6 @@ const TEIAligner: React.FC = () => {
     };
   }, [alignedComments]);
 
-  useEffect(() => {
-    if (isManualAlignmentMode) {
-      document.addEventListener('mouseup', handleTextSelection);
-      return () => {
-        document.removeEventListener('mouseup', handleTextSelection);
-        setSelectedTextRange(null);
-        setActiveAlignmentCommentId(null);
-      };
-    }
-  }, [isManualAlignmentMode]);
-
   const handleChapterSelect = useCallback(async (chapterId: string) => {
     try {
       const chapter = chapters.find(c => c.id === chapterId);
@@ -152,6 +143,9 @@ const TEIAligner: React.FC = () => {
     setSelectedTextRange(null);
     setActiveAlignmentCommentId(null);
     setIsManualAlignmentMode(false);
+    setIsReviewMode(false);
+    setOriginalXML(null);
+    setReviewEditorName('');
   }, []);
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,17 +158,40 @@ const TEIAligner: React.FC = () => {
 
     try {
       const text = await file.text();
-      setCommentsFile(file);
-      setCommentsText(text);
+
+      if (file.name.endsWith('.xml')) {
+        // XML file: enter review mode
+        const comments = parseXMLComments(text);
+        if (comments.length === 0) {
+          throw new Error('No comments found in the XML file');
+        }
+        const chapterId = parseChapterFromTarget(text);
+        setIsReviewMode(true);
+        setOriginalXML(text);
+        setReviewEditorName(file.name.replace('.xml', ''));
+        setAlignedComments(comments);
+        setCommentsText(comments.map(c => `${c.text}: ${c.comment}`).join('\n'));
+        if (chapterId) {
+          await handleChapterSelect(chapterId);
+        }
+        toast({
+          title: "XML Loaded",
+          description: `${comments.length} comments loaded from ${file.name}`,
+        });
+      } else {
+        // TXT file: fresh alignment workflow
+        setCommentsFile(file);
+        setCommentsText(text);
+      }
     } catch (err) {
       setError("Error processing comments file");
       toast({
         title: "Error",
-        description: "Failed to process the comments file.",
+        description: err instanceof Error ? err.message : "Failed to process the comments file.",
         variant: "destructive",
       });
     }
-  }, [resetCommentStates]);
+  }, [resetCommentStates, handleChapterSelect]);
 
   const handleClearFile = useCallback(() => {
     resetCommentStates();
@@ -219,17 +236,23 @@ const TEIAligner: React.FC = () => {
     }
 
     const range = selection.getRangeAt(0);
-    const startContainer = range.startContainer.parentElement;
-    const endContainer = range.endContainer.parentElement;
+    const startNode = range.startContainer instanceof Element
+      ? range.startContainer
+      : range.startContainer.parentElement;
+    const endNode = range.endContainer instanceof Element
+      ? range.endContainer
+      : range.endContainer.parentElement;
 
-    if (!startContainer?.classList.contains('tei-w') ||
-      !endContainer?.classList.contains('tei-w')) {
+    const startWord = startNode?.closest('.tei-w');
+    const endWord = endNode?.closest('.tei-w');
+
+    if (!startWord || !endWord) {
       setIsTextSelected(false);
       return;
     }
 
-    const startId = parseInt(startContainer.getAttribute('data-id')?.split('_')[1] || '0');
-    const endId = parseInt(endContainer.getAttribute('data-id')?.split('_')[1] || '0');
+    const startId = parseInt(startWord.getAttribute('data-id')?.split('_')[1] || '0');
+    const endId = parseInt(endWord.getAttribute('data-id')?.split('_')[1] || '0');
 
     if (startId && endId) {
       setSelectedTextRange({
@@ -242,11 +265,66 @@ const TEIAligner: React.FC = () => {
     }
   }, [isManualAlignmentMode, activeAlignmentCommentId]);
 
+  useEffect(() => {
+    if (isManualAlignmentMode) {
+      document.addEventListener('mouseup', handleTextSelection);
+      return () => {
+        document.removeEventListener('mouseup', handleTextSelection);
+        setSelectedTextRange(null);
+        setActiveAlignmentCommentId(null);
+      };
+    }
+  }, [isManualAlignmentMode, handleTextSelection]);
+
   const handleCancelSelection = useCallback(() => {
     setSelectedTextRange(null);
     setIsTextSelected(false);
     window.getSelection()?.removeAllRanges();
   }, []);
+
+  const handleXMLCommentsLoaded = useCallback(async (
+    comments: AlignedComment[],
+    chapterId: string,
+    editorName: string,
+    rawXml: string
+  ) => {
+    resetCommentStates();
+    setIsReviewMode(true);
+    setOriginalXML(rawXml);
+    setReviewEditorName(editorName);
+    setAlignedComments(comments);
+    setCommentsText(comments.map(c => `${c.text}: ${c.comment}`).join('\n'));
+    await handleChapterSelect(chapterId);
+    toast({
+      title: "XML Loaded",
+      description: `${comments.length} comments loaded from ${editorName}/${chapterId}.xml`,
+    });
+  }, [resetCommentStates, handleChapterSelect]);
+
+  const handleXMLClear = useCallback(() => {
+    resetCommentStates();
+  }, [resetCommentStates]);
+
+  const handleDownloadReviewXML = useCallback(() => {
+    if (!originalXML || !selectedChapter || !alignedComments.length) return;
+
+    const patchedXml = patchXMLComments(originalXML, alignedComments);
+    const blob = new Blob([patchedXml], { type: 'application/xml' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const source = selectedChapter.id.toLowerCase().includes('intro') ? 'intro' : selectedChapter.id;
+    a.download = `${reviewEditorName}_${source}.xml`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    toast({
+      title: "Downloaded",
+      description: `${reviewEditorName}_${source}.xml saved with updated alignments.`,
+    });
+  }, [originalXML, selectedChapter, alignedComments, reviewEditorName]);
 
   const handleSaveXML = useCallback(async (metadata: TEIMetadata, editorFilename: string) => {
     if (!selectedChapter || !alignedComments.length) return;
@@ -300,7 +378,8 @@ const TEIAligner: React.FC = () => {
           </CardHeader>
 
           <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8">
+            <div className="flex items-center gap-4 mb-8">
+              {/* Left: Chapter selector */}
               <ChapterSelector
                 chapters={chapters}
                 selectedChapter={selectedChapter}
@@ -309,40 +388,65 @@ const TEIAligner: React.FC = () => {
                 setIsDropdownOpen={setIsDropdownOpen}
               />
 
-              <div className="flex items-center gap-4 w-full md:w-auto">
-                <Button
-                  onClick={handleProcess}
-                  disabled={isProcessing || !selectedChapter || !commentsFile}
-                  className="bg-accent hover:bg-accent/90 text-white font-serif text-lg px-8 py-6 rounded-lg"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    'Align Comments'
-                  )}
-                </Button>
+              {/* Center: Action buttons */}
+              <div className="flex items-center gap-3">
+                {!isReviewMode && (
+                  <>
+                    <FileUploader
+                      commentsFile={commentsFile}
+                      onFileUpload={handleFileUpload}
+                      onClearFile={handleClearFile}
+                    />
+                    <Button
+                      onClick={handleProcess}
+                      disabled={isProcessing || !selectedChapter || !commentsFile}
+                      className="bg-accent hover:bg-accent/90 text-white font-serif px-6 py-2 rounded-lg"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        'Align Comments'
+                      )}
+                    </Button>
+                  </>
+                )}
                 {alignedComments.length > 0 && (
-                  <SaveTEIButton
-                    alignedComments={alignedComments}
-                    onSave={() => setIsSaveDialogOpen(true)}
+                  isReviewMode ? (
+                    <Button
+                      onClick={handleDownloadReviewXML}
+                      className="bg-accent hover:bg-accent/90 text-white font-serif px-6 py-2 rounded-lg"
+                    >
+                      Download XML
+                    </Button>
+                  ) : (
+                    <SaveTEIButton
+                      alignedComments={alignedComments}
+                      onSave={() => setIsSaveDialogOpen(true)}
+                    />
+                  )
+                )}
+                {!isReviewMode && (
+                  <SaveTEIDialog
+                    isOpen={isSaveDialogOpen}
+                    onClose={() => setIsSaveDialogOpen(false)}
+                    onSave={handleSaveXML}
+                    selectedChapter={selectedChapter?.id || ''}
                   />
                 )}
-                <SaveTEIDialog
-                  isOpen={isSaveDialogOpen}
-                  onClose={() => setIsSaveDialogOpen(false)}
-                  onSave={handleSaveXML}
-                  selectedChapter={selectedChapter?.id || ''}
-                />
               </div>
 
-              <FileUploader
-                commentsFile={commentsFile}
-                onFileUpload={handleFileUpload}
-                onClearFile={handleClearFile}
-              />
+              {/* Right: XML review selector */}
+              <div className="ml-auto">
+                <XMLFileSelector
+                  onCommentsLoaded={handleXMLCommentsLoaded}
+                  onClear={handleXMLClear}
+                  isActive={isReviewMode}
+                  selectedChapterId={selectedChapter?.id || null}
+                />
+              </div>
             </div>
 
             <div className="grid md:grid-cols-2 gap-8">

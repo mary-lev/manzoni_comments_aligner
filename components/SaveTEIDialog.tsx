@@ -71,6 +71,7 @@ export function SaveTEIDialog({ isOpen, onClose, onSave, selectedChapter }: Save
       publisherPlace: edition.city,
       publisherYear: edition.date.toString(),
     };
+    console.log('Saving TEI with metadata:', metadata);
 
     onSave(metadata, edition.filename);
   };
